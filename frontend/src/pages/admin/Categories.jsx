@@ -29,10 +29,12 @@ function CategoryActions({ category, onEdit, onDelete, mobile = false }) {
         aria-label={`Edit kategori ${category.name}`}
         onClick={() => onEdit(category)}
         className={`
-          inline-flex min-h-10 cursor-pointer items-center justify-center
-          gap-2 rounded-lg border border-[#d9d4c8] bg-white
-          font-bold text-[#294f3e] transition
-          hover:border-[#294f3e] hover:bg-[#294f3e] hover:text-white
+          inline-flex min-h-10 cursor-pointer items-center
+          justify-center gap-2 rounded-lg border
+          border-[#d9d4c8] bg-white font-bold
+          text-[#294f3e] transition
+          hover:border-[#294f3e] hover:bg-[#294f3e]
+          hover:text-white
           ${mobile ? "flex-1 px-4 text-sm" : "h-10 w-10"}
         `}
       >
@@ -46,10 +48,12 @@ function CategoryActions({ category, onEdit, onDelete, mobile = false }) {
         aria-label={`Hapus kategori ${category.name}`}
         onClick={() => onDelete(category)}
         className={`
-          inline-flex min-h-10 cursor-pointer items-center justify-center
-          gap-2 rounded-lg border border-[#ead4d4] bg-white
-          font-bold text-[#b44343] transition
-          hover:border-[#b44343] hover:bg-[#b44343] hover:text-white
+          inline-flex min-h-10 cursor-pointer items-center
+          justify-center gap-2 rounded-lg border
+          border-[#ead4d4] bg-white font-bold
+          text-[#b44343] transition
+          hover:border-[#b44343] hover:bg-[#b44343]
+          hover:text-white
           ${mobile ? "flex-1 px-4 text-sm" : "h-10 w-10"}
         `}
       >
@@ -96,8 +100,8 @@ function CategoryModal({
 
   return (
     <div
-      className="fixed inset-0 z-[100] grid place-items-center overflow-y-auto bg-black/45 px-4 py-8 backdrop-blur-[2px]"
       role="presentation"
+      className="fixed inset-0 z-[100] grid place-items-center overflow-y-auto bg-black/45 px-4 py-8 backdrop-blur-[2px]"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && !submitting) {
           onClose();
@@ -141,7 +145,7 @@ function CategoryModal({
           </button>
         </div>
 
-        <form onSubmit={onSubmit}>
+        <form onSubmit={onSubmit} noValidate>
           <div className="px-5 py-6 sm:px-6">
             <label
               htmlFor="category-name"
@@ -162,9 +166,9 @@ function CategoryModal({
               maxLength={100}
               disabled={submitting}
               className={`
-                min-h-12 w-full rounded-lg border bg-[#fbfaf7]
-                px-4 text-sm text-[#27362f] outline-none transition
-                placeholder:text-[#9da5a1]
+                min-h-12 w-full rounded-lg border
+                bg-[#fbfaf7] px-4 text-sm text-[#27362f]
+                outline-none transition placeholder:text-[#9da5a1]
                 focus:bg-white focus:ring-4
                 disabled:cursor-not-allowed disabled:opacity-60
                 ${
@@ -213,6 +217,7 @@ function CategoryModal({
               ) : (
                 <>
                   {isEdit ? <Pencil size={17} /> : <Plus size={18} />}
+
                   {isEdit ? "Simpan Perubahan" : "Simpan Kategori"}
                 </>
               )}
@@ -233,9 +238,11 @@ function Categories() {
   const [categoryName, setCategoryName] = useState("");
   const [formError, setFormError] = useState("");
 
-  const fetchCategories = useCallback(async () => {
+  const fetchCategories = useCallback(async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) {
+        setLoading(true);
+      }
 
       const response = await api.get("/categories");
       setCategories(response.data.data || []);
@@ -245,13 +252,46 @@ function Categories() {
         getErrorMessage(error, "Tidak dapat mengambil data kategori."),
       );
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
   }, []);
 
+  /*
+   * Pemuatan pertama ditulis langsung di dalam effect.
+   * Ini menghindari error react-hooks/set-state-in-effect.
+   */
   useEffect(() => {
-    fetchCategories();
-  }, [fetchCategories]);
+    let active = true;
+
+    async function loadInitialCategories() {
+      try {
+        const response = await api.get("/categories");
+
+        if (active) {
+          setCategories(response.data.data || []);
+        }
+      } catch (error) {
+        if (active) {
+          showError(
+            "Gagal memuat kategori",
+            getErrorMessage(error, "Tidak dapat mengambil data kategori."),
+          );
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadInitialCategories();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const closeModal = useCallback(() => {
     if (submitting) return;
@@ -325,12 +365,17 @@ function Categories() {
   async function handleSubmit(event) {
     event.preventDefault();
 
-    if (submitting || !validateCategoryName()) return;
+    if (submitting || !validateCategoryName()) {
+      return;
+    }
 
     const name = categoryName.trim();
     const isEdit = modal.mode === "edit";
 
-    if (isEdit && name === modal.category?.name.trim()) {
+    if (
+      isEdit &&
+      name.toLowerCase() === modal.category?.name.trim().toLowerCase()
+    ) {
       closeModal();
       return;
     }
@@ -344,8 +389,16 @@ function Categories() {
         await api.post("/categories", { name });
       }
 
-      closeModal();
-      await fetchCategories();
+      /*
+       * Tutup modal secara langsung setelah request berhasil.
+       * Jangan memanggil closeModal saat submitting masih true.
+       */
+      setSubmitting(false);
+      setModal(initialModal);
+      setCategoryName("");
+      setFormError("");
+
+      await fetchCategories(false);
 
       await Swal.fire({
         icon: "success",
@@ -385,7 +438,7 @@ function Categories() {
     try {
       await api.delete(`/categories/${category.id}`);
 
-      await fetchCategories();
+      await fetchCategories(false);
 
       await Swal.fire({
         icon: "success",
@@ -504,7 +557,6 @@ function Categories() {
             </div>
           ) : (
             <>
-              {/* Tampilan HP dan tablet */}
               <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2 lg:hidden">
                 {categories.map((category, index) => (
                   <article
@@ -543,7 +595,6 @@ function Categories() {
                 ))}
               </div>
 
-              {/* Tampilan desktop */}
               <div className="hidden overflow-x-auto lg:block">
                 <table className="w-full min-w-[650px] border-collapse text-left">
                   <thead>

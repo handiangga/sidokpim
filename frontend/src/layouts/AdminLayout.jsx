@@ -1,6 +1,6 @@
 import { CalendarDays, FolderTree, LogOut, Menu, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 
 const navigation = [
@@ -26,14 +26,9 @@ function getStoredUser() {
 
 function AdminLayout() {
   const navigate = useNavigate();
-  const location = useLocation();
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const user = getStoredUser();
-
-  useEffect(() => {
-    setSidebarOpen(false);
-  }, [location.pathname]);
 
   useEffect(() => {
     document.body.style.overflow = sidebarOpen ? "hidden" : "";
