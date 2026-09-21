@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #245a47;
+  --color-primary-dark: #173f32;
+  --color-gold: #d9b86c;
+  --color-gold-dark: #b08b42;
+  --color-cream: #faf8f2;
+}
+
+html {
+  min-width: 320px;
+  background: var(--color-cream);
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  color: #26352e;
+  background: var(--color-cream);
+  font-family: Inter, Arial, Helvetica, sans-serif;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  transition: 0.2s ease;
+}
