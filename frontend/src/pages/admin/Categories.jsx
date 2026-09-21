@@ -1,145 +1,369 @@
-import { FolderTree, Pencil, Plus, Tag, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { FolderTree, Pencil, Plus, Tag, Trash2, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Swal from "sweetalert2";
 import api from "../../services/api";
+import { getErrorMessage, showError } from "../../utils/alerts";
+
+const initialModal = {
+  open: false,
+  mode: "add",
+  category: null,
+};
+
+function formatDate(date) {
+  if (!date) return "-";
+
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  }).format(new Date(date));
+}
+
+function CategoryActions({ category, onEdit, onDelete, mobile = false }) {
+  return (
+    <div className={`flex gap-2 ${mobile ? "w-full" : "justify-center"}`}>
+      <button
+        type="button"
+        title="Edit kategori"
+        aria-label={`Edit kategori ${category.name}`}
+        onClick={() => onEdit(category)}
+        className={`
+          inline-flex min-h-10 cursor-pointer items-center justify-center
+          gap-2 rounded-lg border border-[#d9d4c8] bg-white
+          font-bold text-[#294f3e] transition
+          hover:border-[#294f3e] hover:bg-[#294f3e] hover:text-white
+          ${mobile ? "flex-1 px-4 text-sm" : "h-10 w-10"}
+        `}
+      >
+        <Pencil size={16} />
+        {mobile && <span>Edit</span>}
+      </button>
+
+      <button
+        type="button"
+        title="Hapus kategori"
+        aria-label={`Hapus kategori ${category.name}`}
+        onClick={() => onDelete(category)}
+        className={`
+          inline-flex min-h-10 cursor-pointer items-center justify-center
+          gap-2 rounded-lg border border-[#ead4d4] bg-white
+          font-bold text-[#b44343] transition
+          hover:border-[#b44343] hover:bg-[#b44343] hover:text-white
+          ${mobile ? "flex-1 px-4 text-sm" : "h-10 w-10"}
+        `}
+      >
+        <Trash2 size={16} />
+        {mobile && <span>Hapus</span>}
+      </button>
+    </div>
+  );
+}
+
+function CategoryModal({
+  modal,
+  name,
+  error,
+  submitting,
+  onNameChange,
+  onClose,
+  onSubmit,
+}) {
+  const inputRef = useRef(null);
+  const isEdit = modal.mode === "edit";
+
+  useEffect(() => {
+    if (!modal.open) return undefined;
+
+    inputRef.current?.focus();
+    document.body.style.overflow = "hidden";
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape" && !submitting) {
+        onClose();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [modal.open, submitting, onClose]);
+
+  if (!modal.open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] grid place-items-center overflow-y-auto bg-black/45 px-4 py-8 backdrop-blur-[2px]"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !submitting) {
+          onClose();
+        }
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="category-modal-title"
+        className="w-full max-w-[520px] overflow-hidden rounded-2xl border border-[#e5dfd2] bg-white shadow-[0_24px_80px_rgba(21,45,35,0.24)]"
+      >
+        <div className="flex items-start gap-4 border-b border-[#eee9df] px-5 py-5 sm:px-6">
+          <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[#294f3e]/10 text-[#294f3e]">
+            {isEdit ? <Pencil size={20} /> : <Plus size={21} />}
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <h2
+              id="category-modal-title"
+              className="text-xl font-extrabold text-[#173f32]"
+            >
+              {isEdit ? "Edit Kategori" : "Tambah Kategori"}
+            </h2>
+
+            <p className="mt-1 text-sm leading-6 text-[#7c8580]">
+              {isEdit
+                ? "Perbarui nama kategori kegiatan."
+                : "Tambahkan kategori baru untuk mengelompokkan kegiatan."}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            aria-label="Tutup modal"
+            onClick={onClose}
+            disabled={submitting}
+            className="grid h-10 w-10 shrink-0 cursor-pointer place-items-center rounded-lg text-[#7e8883] transition hover:bg-[#f0eee8] hover:text-[#294f3e] disabled:cursor-not-allowed"
+          >
+            <X size={21} />
+          </button>
+        </div>
+
+        <form onSubmit={onSubmit}>
+          <div className="px-5 py-6 sm:px-6">
+            <label
+              htmlFor="category-name"
+              className="mb-2 block text-sm font-bold text-[#284138]"
+            >
+              Nama Kategori
+              <span className="ml-1 text-red-500">*</span>
+            </label>
+
+            <input
+              ref={inputRef}
+              id="category-name"
+              name="category_name"
+              type="text"
+              value={name}
+              onChange={onNameChange}
+              placeholder="Contoh: Penerangan Hukum"
+              maxLength={100}
+              disabled={submitting}
+              className={`
+                min-h-12 w-full rounded-lg border bg-[#fbfaf7]
+                px-4 text-sm text-[#27362f] outline-none transition
+                placeholder:text-[#9da5a1]
+                focus:bg-white focus:ring-4
+                disabled:cursor-not-allowed disabled:opacity-60
+                ${
+                  error
+                    ? "border-red-400 focus:border-red-500 focus:ring-red-500/10"
+                    : "border-[#ddd9cf] focus:border-[#294f3e] focus:ring-[#294f3e]/10"
+                }
+              `}
+            />
+
+            <div className="mt-2 flex items-start justify-between gap-4">
+              <p
+                className={`text-xs ${
+                  error ? "text-red-500" : "text-[#8a928e]"
+                }`}
+              >
+                {error || "Minimal 3 karakter dan tidak boleh sama."}
+              </p>
+
+              <p className="shrink-0 text-xs text-[#a1a8a4]">
+                {name.length}/100
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-col-reverse gap-3 border-t border-[#eee9df] bg-[#fcfbf8] px-5 py-5 sm:flex-row sm:justify-end sm:px-6">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={submitting}
+              className="min-h-12 w-full cursor-pointer rounded-lg border border-[#294f3e] bg-white px-6 text-sm font-bold text-[#294f3e] transition hover:bg-[#f1f4f2] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+            >
+              Batal
+            </button>
+
+            <button
+              type="submit"
+              disabled={submitting}
+              className="inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-[#294f3e] px-6 text-sm font-bold text-white transition hover:bg-[#173f32] focus:outline-none focus:ring-4 focus:ring-[#294f3e]/20 disabled:cursor-wait disabled:opacity-60 sm:w-auto"
+            >
+              {submitting ? (
+                <>
+                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                  Menyimpan...
+                </>
+              ) : (
+                <>
+                  {isEdit ? <Pencil size={17} /> : <Plus size={18} />}
+                  {isEdit ? "Simpan Perubahan" : "Simpan Kategori"}
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 function Categories() {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
-  async function fetchCategories() {
+  const [modal, setModal] = useState(initialModal);
+  const [categoryName, setCategoryName] = useState("");
+  const [formError, setFormError] = useState("");
+
+  const fetchCategories = useCallback(async () => {
     try {
       setLoading(true);
 
       const response = await api.get("/categories");
-      setCategories(response.data.data);
+      setCategories(response.data.data || []);
     } catch (error) {
-      Swal.fire({
-        icon: "error",
-        title: "Gagal memuat kategori",
-        text:
-          error.response?.data?.message ||
-          "Tidak dapat mengambil data kategori.",
-        confirmButtonColor: "#245a47",
-      });
+      showError(
+        "Gagal memuat kategori",
+        getErrorMessage(error, "Tidak dapat mengambil data kategori."),
+      );
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
     fetchCategories();
-  }, []);
+  }, [fetchCategories]);
 
-  async function handleAdd() {
-    const result = await Swal.fire({
-      title: "Tambah Kategori",
-      text: "Masukkan nama kategori kegiatan.",
-      input: "text",
-      inputPlaceholder: "Contoh: Penerangan Hukum",
-      showCancelButton: true,
-      confirmButtonText: "Simpan",
-      cancelButtonText: "Batal",
-      confirmButtonColor: "#245a47",
-      cancelButtonColor: "#8a918d",
-      reverseButtons: true,
-      inputValidator: (value) => {
-        if (!value.trim()) {
-          return "Nama kategori wajib diisi";
-        }
+  const closeModal = useCallback(() => {
+    if (submitting) return;
 
-        if (value.trim().length < 3) {
-          return "Nama kategori minimal 3 karakter";
-        }
+    setModal(initialModal);
+    setCategoryName("");
+    setFormError("");
+  }, [submitting]);
 
-        return undefined;
-      },
+  function openAddModal() {
+    setCategoryName("");
+    setFormError("");
+
+    setModal({
+      open: true,
+      mode: "add",
+      category: null,
     });
+  }
 
-    if (!result.isConfirmed) return;
+  function openEditModal(category) {
+    setCategoryName(category.name);
+    setFormError("");
 
-    try {
-      await api.post("/categories", {
-        name: result.value.trim(),
-      });
+    setModal({
+      open: true,
+      mode: "edit",
+      category,
+    });
+  }
 
-      await Swal.fire({
-        icon: "success",
-        title: "Kategori ditambahkan",
-        text: "Kategori baru berhasil disimpan.",
-        showConfirmButton: false,
-        timer: 1200,
-      });
+  function handleNameChange(event) {
+    setCategoryName(event.target.value);
 
-      fetchCategories();
-    } catch (error) {
-      Swal.fire({
-        icon: "error",
-        title: "Gagal menambahkan",
-        text:
-          error.response?.data?.message ||
-          "Terjadi kesalahan saat menyimpan kategori.",
-        confirmButtonColor: "#245a47",
-      });
+    if (formError) {
+      setFormError("");
     }
   }
 
-  async function handleEdit(category) {
-    const result = await Swal.fire({
-      title: "Edit Kategori",
-      text: "Ubah nama kategori kegiatan.",
-      input: "text",
-      inputValue: category.name,
-      showCancelButton: true,
-      confirmButtonText: "Simpan Perubahan",
-      cancelButtonText: "Batal",
-      confirmButtonColor: "#245a47",
-      cancelButtonColor: "#8a918d",
-      reverseButtons: true,
-      inputValidator: (value) => {
-        if (!value.trim()) {
-          return "Nama kategori wajib diisi";
-        }
+  function validateCategoryName() {
+    const normalizedName = categoryName.trim();
 
-        if (value.trim().length < 3) {
-          return "Nama kategori minimal 3 karakter";
-        }
+    if (!normalizedName) {
+      setFormError("Nama kategori wajib diisi.");
+      return false;
+    }
 
-        return undefined;
-      },
+    if (normalizedName.length < 3) {
+      setFormError("Nama kategori minimal 3 karakter.");
+      return false;
+    }
+
+    const duplicate = categories.some((category) => {
+      const sameName =
+        category.name.trim().toLowerCase() === normalizedName.toLowerCase();
+
+      const currentCategory =
+        modal.mode === "edit" && category.id === modal.category?.id;
+
+      return sameName && !currentCategory;
     });
 
-    if (!result.isConfirmed) return;
+    if (duplicate) {
+      setFormError("Nama kategori sudah digunakan.");
+      return false;
+    }
 
-    const updatedName = result.value.trim();
+    return true;
+  }
 
-    if (updatedName === category.name) {
+  async function handleSubmit(event) {
+    event.preventDefault();
+
+    if (submitting || !validateCategoryName()) return;
+
+    const name = categoryName.trim();
+    const isEdit = modal.mode === "edit";
+
+    if (isEdit && name === modal.category?.name.trim()) {
+      closeModal();
       return;
     }
 
     try {
-      await api.put(`/categories/${category.id}`, {
-        name: updatedName,
-      });
+      setSubmitting(true);
+
+      if (isEdit) {
+        await api.put(`/categories/${modal.category.id}`, { name });
+      } else {
+        await api.post("/categories", { name });
+      }
+
+      closeModal();
+      await fetchCategories();
 
       await Swal.fire({
         icon: "success",
-        title: "Kategori diperbarui",
-        text: "Perubahan kategori berhasil disimpan.",
+        title: isEdit ? "Kategori diperbarui" : "Kategori ditambahkan",
+        text: isEdit
+          ? "Perubahan kategori berhasil disimpan."
+          : "Kategori baru berhasil disimpan.",
         showConfirmButton: false,
-        timer: 1200,
+        timer: 1300,
+        timerProgressBar: true,
       });
-
-      fetchCategories();
     } catch (error) {
-      Swal.fire({
-        icon: "error",
-        title: "Gagal memperbarui",
-        text:
-          error.response?.data?.message ||
-          "Terjadi kesalahan saat memperbarui kategori.",
-        confirmButtonColor: "#245a47",
-      });
+      showError(
+        isEdit ? "Gagal memperbarui" : "Gagal menambahkan",
+        getErrorMessage(error, "Terjadi kesalahan saat menyimpan kategori."),
+      );
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -147,8 +371,7 @@ function Categories() {
     const result = await Swal.fire({
       icon: "warning",
       title: "Hapus kategori?",
-      html: `Kategori <strong>${category.name}</strong> akan dihapus.`,
-      text: "Kategori yang masih digunakan oleh kegiatan tidak dapat dihapus.",
+      text: `"${category.name}" akan dihapus. Kategori yang masih digunakan oleh kegiatan tidak dapat dihapus.`,
       showCancelButton: true,
       confirmButtonText: "Ya, hapus",
       cancelButtonText: "Batal",
@@ -162,197 +385,236 @@ function Categories() {
     try {
       await api.delete(`/categories/${category.id}`);
 
+      await fetchCategories();
+
       await Swal.fire({
         icon: "success",
         title: "Kategori dihapus",
         text: "Kategori berhasil dihapus dari sistem.",
         showConfirmButton: false,
-        timer: 1200,
+        timer: 1300,
+        timerProgressBar: true,
       });
-
-      fetchCategories();
     } catch (error) {
-      Swal.fire({
-        icon: "error",
-        title: "Kategori tidak dapat dihapus",
-        text:
-          error.response?.data?.message ||
-          "Terjadi kesalahan saat menghapus kategori.",
-        confirmButtonColor: "#245a47",
-      });
+      showError(
+        "Kategori tidak dapat dihapus",
+        getErrorMessage(
+          error,
+          "Kategori mungkin masih digunakan oleh data kegiatan.",
+        ),
+      );
     }
   }
 
-  function formatDate(date) {
-    if (!date) return "-";
-
-    return new Intl.DateTimeFormat("id-ID", {
-      day: "2-digit",
-      month: "long",
-      year: "numeric",
-    }).format(new Date(date));
-  }
-
   return (
-    <section className="mx-auto max-w-5xl">
-      <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="mb-2 text-[11px] font-extrabold tracking-[0.18em] text-gold-dark uppercase">
-            Pengaturan Data
-          </p>
-
-          <h1 className="font-serif text-3xl font-medium text-primary-dark">
-            Kelola Kategori
-          </h1>
-
-          <p className="mt-2 text-sm text-[#7c8580]">
-            Atur kategori yang digunakan untuk mengelompokkan kegiatan.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={handleAdd}
-          className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg bg-primary px-5 text-sm font-bold text-white shadow-sm hover:-translate-y-0.5 hover:bg-primary-dark"
-        >
-          <Plus size={18} />
-          Tambah Kategori
-        </button>
-      </div>
-
-      <div className="mb-6 grid gap-4 sm:grid-cols-2">
-        <div className="flex items-center gap-4 rounded-xl border border-[#e8e3d8] bg-white p-5 shadow-sm">
-          <div className="grid h-12 w-12 place-items-center rounded-xl bg-primary/10 text-primary">
-            <FolderTree size={23} />
-          </div>
-
+    <>
+      <section className="mx-auto w-full max-w-[1400px]">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-2xl font-bold text-primary-dark">
-              {categories.length}
+            <p className="mb-2 text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#a67c24] sm:text-[11px]">
+              Pengaturan Data
             </p>
-            <p className="mt-1 text-xs text-[#838c87]">Total kategori</p>
+
+            <h1 className="text-2xl font-extrabold text-[#173f32] sm:text-3xl">
+              Kategori
+            </h1>
+
+            <p className="mt-2 text-sm text-[#7c8580]">
+              Atur kategori yang digunakan untuk mengelompokkan kegiatan.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={openAddModal}
+            className="inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-[#294f3e] px-5 text-sm font-bold text-white shadow-sm transition hover:bg-[#173f32] sm:w-auto"
+          >
+            <Plus size={18} />
+            Tambah Kategori
+          </button>
+        </div>
+
+        <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="flex items-center gap-4 rounded-xl border border-[#e8e3d8] bg-white p-5 shadow-sm">
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-[#294f3e]/10 text-[#294f3e]">
+              <FolderTree size={23} />
+            </div>
+
+            <div>
+              <p className="text-2xl font-extrabold text-[#173f32]">
+                {loading ? "—" : categories.length}
+              </p>
+
+              <p className="mt-1 text-xs text-[#838c87]">Total kategori</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 rounded-xl border border-[#e8e3d8] bg-white p-5 shadow-sm">
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-[#b68a2d]/15 text-[#a67c24]">
+              <Tag size={23} />
+            </div>
+
+            <div>
+              <p className="text-sm font-bold text-[#173f32]">
+                Pengelompokan Kegiatan
+              </p>
+
+              <p className="mt-1 text-xs text-[#838c87]">
+                Digunakan pada data dokumentasi
+              </p>
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-4 rounded-xl border border-[#e8e3d8] bg-white p-5 shadow-sm">
-          <div className="grid h-12 w-12 place-items-center rounded-xl bg-gold/20 text-gold-dark">
-            <Tag size={23} />
-          </div>
+        <div className="overflow-hidden rounded-xl border border-[#e8e3d8] bg-white shadow-sm">
+          <div className="border-b border-[#eeeae1] px-4 py-5 sm:px-6">
+            <h2 className="text-lg font-extrabold text-[#173f32] sm:text-xl">
+              Daftar Kategori
+            </h2>
 
-          <div>
-            <p className="text-sm font-bold text-primary-dark">
-              Pengelompokan Kegiatan
-            </p>
-            <p className="mt-1 text-xs text-[#838c87]">
-              Digunakan pada data dokumentasi
+            <p className="mt-1 text-sm text-[#8a928e]">
+              Nama kategori tidak boleh sama.
             </p>
           </div>
-        </div>
-      </div>
 
-      <div className="overflow-hidden rounded-xl border border-[#e8e3d8] bg-white shadow-sm">
-        <div className="border-b border-[#eeeae1] px-6 py-5">
-          <h2 className="font-serif text-xl font-medium text-primary-dark">
-            Daftar Kategori
-          </h2>
+          {loading ? (
+            <div className="px-6 py-16 text-center">
+              <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-4 border-[#294f3e]/20 border-t-[#294f3e]" />
 
-          <p className="mt-1 text-sm text-[#8a928e]">
-            Nama kategori tidak boleh sama.
-          </p>
-        </div>
+              <p className="text-sm text-[#7c8580]">Memuat kategori...</p>
+            </div>
+          ) : categories.length === 0 ? (
+            <div className="px-6 py-16 text-center">
+              <FolderTree size={44} className="mx-auto mb-3 text-[#c7ccc9]" />
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[650px] border-collapse text-left">
-            <thead>
-              <tr className="bg-[#faf9f5] text-[11px] tracking-wider text-[#77807b] uppercase">
-                <th className="w-20 px-6 py-4 text-center font-bold">No.</th>
-                <th className="px-6 py-4 font-bold">Nama Kategori</th>
-                <th className="px-6 py-4 font-bold">Tanggal Dibuat</th>
-                <th className="w-32 px-6 py-4 text-center font-bold">Aksi</th>
-              </tr>
-            </thead>
+              <p className="font-bold text-[#59645e]">Belum ada kategori</p>
 
-            <tbody className="divide-y divide-[#eeeae1]">
-              {loading ? (
-                <tr>
-                  <td colSpan="4" className="px-6 py-16 text-center">
-                    <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
+              <p className="mt-1 text-sm text-[#929995]">
+                Tambahkan kategori untuk mengelompokkan kegiatan.
+              </p>
 
-                    <p className="text-sm text-[#7c8580]">Memuat kategori...</p>
-                  </td>
-                </tr>
-              ) : categories.length === 0 ? (
-                <tr>
-                  <td colSpan="4" className="px-6 py-16 text-center">
-                    <FolderTree
-                      size={42}
-                      className="mx-auto mb-3 text-[#c7ccc9]"
-                    />
-
-                    <p className="font-semibold text-[#59645e]">
-                      Belum ada kategori
-                    </p>
-
-                    <p className="mt-1 text-sm text-[#929995]">
-                      Tambahkan kategori untuk mengelompokkan kegiatan.
-                    </p>
-                  </td>
-                </tr>
-              ) : (
-                categories.map((category, index) => (
-                  <tr
+              <button
+                type="button"
+                onClick={openAddModal}
+                className="mt-5 inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-lg bg-[#294f3e] px-5 text-sm font-bold text-white"
+              >
+                <Plus size={17} />
+                Tambah Kategori
+              </button>
+            </div>
+          ) : (
+            <>
+              {/* Tampilan HP dan tablet */}
+              <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2 lg:hidden">
+                {categories.map((category, index) => (
+                  <article
                     key={category.id}
-                    className="transition hover:bg-[#fcfbf8]"
+                    className="rounded-xl border border-[#e8e3d8] bg-white p-4"
                   >
-                    <td className="px-6 py-4 text-center text-sm text-[#8b928e]">
-                      {index + 1}
-                    </td>
+                    <div className="flex items-start gap-3">
+                      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-[#294f3e]/10 text-[#294f3e]">
+                        <Tag size={18} />
+                      </div>
 
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary/10 text-primary">
-                          <Tag size={17} />
-                        </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-bold text-[#a67c24]">
+                          Kategori {index + 1}
+                        </p>
 
-                        <span className="font-semibold text-primary-dark">
+                        <h2 className="mt-1 break-words font-extrabold text-[#173f32]">
                           {category.name}
-                        </span>
+                        </h2>
+
+                        <p className="mt-2 text-xs text-[#7d8782]">
+                          Dibuat {formatDate(category.createdAt)}
+                        </p>
                       </div>
-                    </td>
+                    </div>
 
-                    <td className="px-6 py-4 text-sm text-[#657069]">
-                      {formatDate(category.createdAt)}
-                    </td>
+                    <div className="mt-4 border-t border-[#eeeae1] pt-4">
+                      <CategoryActions
+                        category={category}
+                        onEdit={openEditModal}
+                        onDelete={handleDelete}
+                        mobile
+                      />
+                    </div>
+                  </article>
+                ))}
+              </div>
 
-                    <td className="px-6 py-4">
-                      <div className="flex justify-center gap-2">
-                        <button
-                          type="button"
-                          title="Edit kategori"
-                          onClick={() => handleEdit(category)}
-                          className="grid h-9 w-9 cursor-pointer place-items-center rounded-lg border border-[#d9d4c8] bg-white text-primary hover:border-primary hover:bg-primary hover:text-white"
-                        >
-                          <Pencil size={16} />
-                        </button>
+              {/* Tampilan desktop */}
+              <div className="hidden overflow-x-auto lg:block">
+                <table className="w-full min-w-[650px] border-collapse text-left">
+                  <thead>
+                    <tr className="bg-[#faf9f5] text-[11px] uppercase tracking-wider text-[#77807b]">
+                      <th className="w-20 px-6 py-4 text-center font-bold">
+                        No.
+                      </th>
 
-                        <button
-                          type="button"
-                          title="Hapus kategori"
-                          onClick={() => handleDelete(category)}
-                          className="grid h-9 w-9 cursor-pointer place-items-center rounded-lg border border-[#ead4d4] bg-white text-[#b44343] hover:border-[#b44343] hover:bg-[#b44343] hover:text-white"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                      <th className="px-6 py-4 font-bold">Nama Kategori</th>
+
+                      <th className="px-6 py-4 font-bold">Tanggal Dibuat</th>
+
+                      <th className="w-32 px-6 py-4 text-center font-bold">
+                        Aksi
+                      </th>
+                    </tr>
+                  </thead>
+
+                  <tbody className="divide-y divide-[#eeeae1]">
+                    {categories.map((category, index) => (
+                      <tr
+                        key={category.id}
+                        className="transition hover:bg-[#fcfbf8]"
+                      >
+                        <td className="px-6 py-4 text-center text-sm text-[#8b928e]">
+                          {index + 1}
+                        </td>
+
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[#294f3e]/10 text-[#294f3e]">
+                              <Tag size={17} />
+                            </div>
+
+                            <span className="font-bold text-[#173f32]">
+                              {category.name}
+                            </span>
+                          </div>
+                        </td>
+
+                        <td className="px-6 py-4 text-sm text-[#657069]">
+                          {formatDate(category.createdAt)}
+                        </td>
+
+                        <td className="px-6 py-4">
+                          <CategoryActions
+                            category={category}
+                            onEdit={openEditModal}
+                            onDelete={handleDelete}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </div>
-      </div>
-    </section>
+      </section>
+
+      <CategoryModal
+        modal={modal}
+        name={categoryName}
+        error={formError}
+        submitting={submitting}
+        onNameChange={handleNameChange}
+        onClose={closeModal}
+        onSubmit={handleSubmit}
+      />
+    </>
   );
 }
 
