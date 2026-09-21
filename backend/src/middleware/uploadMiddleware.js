@@ -1,19 +1,6 @@
 "use strict";
 
 const multer = require("multer");
-const path = require("path");
-const crypto = require("crypto");
-
-const storage = multer.diskStorage({
-  destination: (req, file, callback) => {
-    callback(null, "uploads/");
-  },
-
-  filename: (req, file, callback) => {
-    const extension = path.extname(file.originalname).toLowerCase();
-    callback(null, `${crypto.randomUUID()}${extension}`);
-  },
-});
 
 const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
 
@@ -28,8 +15,10 @@ const fileFilter = (req, file, callback) => {
 };
 
 module.exports = multer({
-  storage,
+  storage: multer.memoryStorage(),
+
   fileFilter,
+
   limits: {
     fileSize: 5 * 1024 * 1024,
   },

@@ -59,6 +59,11 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true,
       },
 
+      cover_public_id: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+
       drive_url: {
         type: DataTypes.TEXT,
         allowNull: false,

@@ -1,30 +1,20 @@
 "use strict";
 
-const fs = require("fs");
-const path = require("path");
 const { Op } = require("sequelize");
 const { Activity, Category } = require("../../models");
-
-function removeCover(coverImage) {
-  if (!coverImage) return;
-
-  const filename = path.basename(coverImage);
-  const filePath = path.join(__dirname, "../../uploads", filename);
-
-  if (fs.existsSync(filePath)) {
-    fs.unlinkSync(filePath);
-  }
-}
+const { uploadCover, deleteCover } = require("../utils/cloudinaryHelper");
 
 exports.getAllActivities = async (req, res, next) => {
   try {
     const { search, category_id } = req.query;
     const where = {};
 
-    if (search) {
+    if (search?.trim()) {
+      const keyword = search.trim();
+
       where[Op.or] = [
-        { title: { [Op.iLike]: `%${search}%` } },
-        { location: { [Op.iLike]: `%${search}%` } },
+        { title: { [Op.iLike]: `%${keyword}%` } },
+        { location: { [Op.iLike]: `%${keyword}%` } },
       ];
     }
 
@@ -85,6 +75,8 @@ exports.getActivityById = async (req, res, next) => {
 };
 
 exports.createActivity = async (req, res, next) => {
+  let uploadedCover = null;
+
   try {
     const { category_id, date, title, location, drive_url } = req.body;
 
@@ -95,8 +87,6 @@ exports.createActivity = async (req, res, next) => {
       !location?.trim() ||
       !drive_url?.trim()
     ) {
-      if (req.file) removeCover(req.file.filename);
-
       return res.status(400).json({
         success: false,
         message:
@@ -107,12 +97,14 @@ exports.createActivity = async (req, res, next) => {
     const category = await Category.findByPk(category_id);
 
     if (!category) {
-      if (req.file) removeCover(req.file.filename);
-
       return res.status(400).json({
         success: false,
         message: "Kategori tidak valid",
       });
+    }
+
+    if (req.file) {
+      uploadedCover = await uploadCover(req.file.buffer);
     }
 
     const activity = await Activity.create({
@@ -121,7 +113,8 @@ exports.createActivity = async (req, res, next) => {
       title: title.trim(),
       location: location.trim(),
       drive_url: drive_url.trim(),
-      cover_image: req.file ? `/uploads/${req.file.filename}` : null,
+      cover_image: uploadedCover?.url || null,
+      cover_public_id: uploadedCover?.publicId || null,
     });
 
     res.status(201).json({
@@ -130,18 +123,21 @@ exports.createActivity = async (req, res, next) => {
       data: activity,
     });
   } catch (error) {
-    if (req.file) removeCover(req.file.filename);
+    if (uploadedCover?.publicId) {
+      await deleteCover(uploadedCover.publicId);
+    }
+
     next(error);
   }
 };
 
 exports.updateActivity = async (req, res, next) => {
+  let uploadedCover = null;
+
   try {
     const activity = await Activity.findByPk(req.params.id);
 
     if (!activity) {
-      if (req.file) removeCover(req.file.filename);
-
       return res.status(404).json({
         success: false,
         message: "Kegiatan tidak ditemukan",
@@ -154,8 +150,6 @@ exports.updateActivity = async (req, res, next) => {
       const category = await Category.findByPk(category_id);
 
       if (!category) {
-        if (req.file) removeCover(req.file.filename);
-
         return res.status(400).json({
           success: false,
           message: "Kategori tidak valid",
@@ -163,7 +157,11 @@ exports.updateActivity = async (req, res, next) => {
       }
     }
 
-    const oldCover = activity.cover_image;
+    if (req.file) {
+      uploadedCover = await uploadCover(req.file.buffer);
+    }
+
+    const oldCoverPublicId = activity.cover_public_id;
 
     await activity.update({
       category_id: category_id || activity.category_id,
@@ -171,13 +169,16 @@ exports.updateActivity = async (req, res, next) => {
       title: title?.trim() || activity.title,
       location: location?.trim() || activity.location,
       drive_url: drive_url?.trim() || activity.drive_url,
-      cover_image: req.file
-        ? `/uploads/${req.file.filename}`
-        : activity.cover_image,
+
+      cover_image: uploadedCover ? uploadedCover.url : activity.cover_image,
+
+      cover_public_id: uploadedCover
+        ? uploadedCover.publicId
+        : activity.cover_public_id,
     });
 
-    if (req.file && oldCover) {
-      removeCover(oldCover);
+    if (uploadedCover && oldCoverPublicId) {
+      await deleteCover(oldCoverPublicId);
     }
 
     res.status(200).json({
@@ -186,7 +187,10 @@ exports.updateActivity = async (req, res, next) => {
       data: activity,
     });
   } catch (error) {
-    if (req.file) removeCover(req.file.filename);
+    if (uploadedCover?.publicId) {
+      await deleteCover(uploadedCover.publicId);
+    }
+
     next(error);
   }
 };
@@ -202,10 +206,13 @@ exports.deleteActivity = async (req, res, next) => {
       });
     }
 
-    const coverImage = activity.cover_image;
+    const coverPublicId = activity.cover_public_id;
 
     await activity.destroy();
-    removeCover(coverImage);
+
+    if (coverPublicId) {
+      await deleteCover(coverPublicId);
+    }
 
     res.status(200).json({
       success: true,
