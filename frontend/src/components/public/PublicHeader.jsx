@@ -86,9 +86,6 @@ function PublicHeader() {
               sm:w-auto lg:float-right
             "
           >
-            <LogIn size={18} className="shrink-0" />
-            Login Administrator
-          </Link>
 
           <div className="hidden pt-16 lg:block">
             <p className="text-right text-sm font-medium leading-6 text-[#17231e]">
