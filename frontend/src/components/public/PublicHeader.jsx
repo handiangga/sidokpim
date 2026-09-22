@@ -75,17 +75,6 @@ function PublicHeader() {
             lg:col-span-1 lg:block lg:self-stretch lg:py-3 lg:pl-0
           "
         >
-          <Link
-            to="/login"
-            className="
-              inline-flex min-h-11 w-full items-center justify-center
-              gap-2 rounded-lg bg-[#294f3e] px-4 text-sm
-              font-bold text-white no-underline shadow-sm transition
-              hover:bg-[#173f32] focus:outline-none
-              focus:ring-4 focus:ring-[#294f3e]/20
-              sm:w-auto lg:float-right
-            "
-          >
 
           <div className="hidden pt-16 lg:block">
             <p className="text-right text-sm font-medium leading-6 text-[#17231e]">
