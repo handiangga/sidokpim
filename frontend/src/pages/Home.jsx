@@ -1,4 +1,10 @@
-import { Filter, FolderOpen, Search } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Filter,
+  FolderOpen,
+  Search,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import ActivityCard from "../components/public/ActivityCard";
 import { getActivities } from "../services/activityService";
@@ -27,12 +33,14 @@ const initialFilter = {
   year: "",
 };
 
+const ITEMS_PER_PAGE = 8;
+
 function Home() {
   const [activities, setActivities] = useState([]);
   const [categories, setCategories] = useState([]);
   const [filter, setFilter] = useState(initialFilter);
   const [appliedFilter, setAppliedFilter] = useState(initialFilter);
-  const [showAll, setShowAll] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -95,9 +103,14 @@ function Home() {
     });
   }, [activities, appliedFilter]);
 
-  const displayedActivities = showAll
-    ? filteredActivities
-    : filteredActivities.slice(0, 8);
+  const totalPages = Math.ceil(filteredActivities.length / ITEMS_PER_PAGE);
+
+  const displayedActivities = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+
+    return filteredActivities.slice(startIndex, endIndex);
+  }, [filteredActivities, currentPage]);
 
   const hasActiveFilter = Object.values(appliedFilter).some(Boolean);
 
@@ -113,13 +126,26 @@ function Home() {
   function applyFilter(event) {
     event.preventDefault();
     setAppliedFilter(filter);
-    setShowAll(false);
+    setCurrentPage(1);
   }
 
   function resetFilter() {
     setFilter(initialFilter);
     setAppliedFilter(initialFilter);
-    setShowAll(false);
+    setCurrentPage(1);
+  }
+
+  function changePage(page) {
+    if (page < 1 || page > totalPages || page === currentPage) {
+      return;
+    }
+
+    setCurrentPage(page);
+
+    window.scrollTo({
+      top: 200,
+      behavior: "smooth",
+    });
   }
 
   const selectClass =
@@ -129,21 +155,9 @@ function Home() {
     <main className="mx-auto w-full max-w-[1600px] px-4 py-4 sm:px-6 lg:px-8 xl:px-10">
       <form
         onSubmit={applyFilter}
-        className="
-          grid grid-cols-1 gap-3
-          md:grid-cols-2
-          xl:grid-cols-[1.6fr_0.65fr_0.65fr_0.65fr_190px]
-        "
+        className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[1.6fr_0.65fr_0.65fr_0.65fr_190px]"
       >
-        <div
-          className="
-            flex min-h-12 w-full items-center gap-3 rounded-lg border
-            border-[#d9dde0] bg-white px-4 transition
-            focus-within:border-[#315b49]
-            focus-within:ring-4 focus-within:ring-[#315b49]/10
-            md:col-span-2 xl:col-span-1
-          "
-        >
+        <div className="flex min-h-12 w-full items-center gap-3 rounded-lg border border-[#d9dde0] bg-white px-4 transition focus-within:border-[#315b49] focus-within:ring-4 focus-within:ring-[#315b49]/10 md:col-span-2 xl:col-span-1">
           <Search
             size={19}
             className="shrink-0 text-[#315b49]"
@@ -210,20 +224,14 @@ function Home() {
 
         <button
           type="submit"
-          className="
-            inline-flex min-h-12 w-full cursor-pointer items-center
-            justify-center gap-2 rounded-lg bg-[#294f3e] px-5
-            text-sm font-bold text-white transition
-            hover:bg-[#173f32] focus:outline-none
-            focus:ring-4 focus:ring-[#294f3e]/20
-          "
+          className="inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-[#294f3e] px-5 text-sm font-bold text-white transition hover:bg-[#173f32] focus:ring-4 focus:ring-[#294f3e]/20 focus:outline-none"
         >
           <Filter size={18} aria-hidden="true" />
           Terapkan
         </button>
       </form>
 
-      <section className="pb-10 pt-7 sm:pt-8">
+      <section className="pt-7 pb-10 sm:pt-8">
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 className="text-xl font-extrabold text-[#101a16] sm:text-2xl">
@@ -241,14 +249,14 @@ function Home() {
             )}
           </div>
 
-          {filteredActivities.length > 8 && (
-            <button
-              type="button"
-              onClick={() => setShowAll((value) => !value)}
-              className="w-fit cursor-pointer bg-transparent text-sm font-bold text-[#315b49] transition hover:text-gold-dark"
-            >
-              {showAll ? "Tampilkan Lebih Sedikit" : "Lihat Semua"} →
-            </button>
+          {!loading && filteredActivities.length > 0 && (
+            <p className="text-xs text-[#7c8580] sm:text-sm">
+              Total{" "}
+              <span className="font-bold text-[#315b49]">
+                {filteredActivities.length}
+              </span>{" "}
+              kegiatan
+            </p>
           )}
         </div>
 
@@ -283,11 +291,76 @@ function Home() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {displayedActivities.map((activity) => (
-              <ActivityCard key={activity.id} activity={activity} />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {displayedActivities.map((activity) => (
+                <ActivityCard key={activity.id} activity={activity} />
+              ))}
+            </div>
+
+            {totalPages > 1 && (
+              <div className="mt-8 flex flex-col items-center gap-3">
+                <p className="text-xs text-[#7c8580]">
+                  Menampilkan{" "}
+                  <span className="font-bold text-[#315b49]">
+                    {(currentPage - 1) * ITEMS_PER_PAGE + 1}–
+                    {Math.min(
+                      currentPage * ITEMS_PER_PAGE,
+                      filteredActivities.length,
+                    )}
+                  </span>{" "}
+                  dari {filteredActivities.length} kegiatan
+                </p>
+
+                <nav
+                  aria-label="Navigasi halaman kegiatan"
+                  className="flex flex-wrap items-center justify-center gap-2"
+                >
+                  <button
+                    type="button"
+                    disabled={currentPage === 1}
+                    onClick={() => changePage(currentPage - 1)}
+                    className="inline-flex h-10 items-center justify-center gap-1 rounded-lg border border-[#d9dde0] bg-white px-3 text-sm font-semibold text-[#315b49] transition hover:border-[#315b49] hover:bg-[#f5f7f6] disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <ChevronLeft size={17} aria-hidden="true" />
+                    <span className="hidden sm:inline">Sebelumnya</span>
+                  </button>
+
+                  {Array.from({ length: totalPages }, (_, index) => {
+                    const page = index + 1;
+                    const isActive = page === currentPage;
+
+                    return (
+                      <button
+                        key={page}
+                        type="button"
+                        aria-label={`Halaman ${page}`}
+                        aria-current={isActive ? "page" : undefined}
+                        onClick={() => changePage(page)}
+                        className={`grid h-10 min-w-10 place-items-center rounded-lg border px-3 text-sm font-bold transition ${
+                          isActive
+                            ? "border-[#294f3e] bg-[#294f3e] text-white"
+                            : "border-[#d9dde0] bg-white text-[#315b49] hover:border-[#315b49] hover:bg-[#f5f7f6]"
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    );
+                  })}
+
+                  <button
+                    type="button"
+                    disabled={currentPage === totalPages}
+                    onClick={() => changePage(currentPage + 1)}
+                    className="inline-flex h-10 items-center justify-center gap-1 rounded-lg border border-[#d9dde0] bg-white px-3 text-sm font-semibold text-[#315b49] transition hover:border-[#315b49] hover:bg-[#f5f7f6] disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <span className="hidden sm:inline">Berikutnya</span>
+                    <ChevronRight size={17} aria-hidden="true" />
+                  </button>
+                </nav>
+              </div>
+            )}
+          </>
         )}
       </section>
     </main>
